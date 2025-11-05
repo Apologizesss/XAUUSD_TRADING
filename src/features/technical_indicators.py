@@ -45,7 +45,7 @@ class TechnicalIndicators:
         missing = [col for col in self.required_columns if col not in df.columns]
 
         if missing:
-            print(f"❌ Missing required columns: {missing}")
+            print(f"[Error] Missing required columns: {missing}")
             return False
 
         return True
@@ -449,7 +449,7 @@ class TechnicalIndicators:
         Returns:
             DataFrame with added indicators
         """
-        print("\n📊 Adding Technical Indicators...")
+        print("\n[Stats] Adding Technical Indicators...")
         print("=" * 70)
 
         # Validate data
@@ -497,7 +497,7 @@ class TechnicalIndicators:
             # Statistical
             df = self.add_statistical_indicators(df)
 
-            print("  └─ ✅ All indicators added!")
+            print("  └─ [OK] All indicators added!")
 
             # Count features
             feature_cols = [
@@ -507,10 +507,10 @@ class TechnicalIndicators:
                 not in self.required_columns
                 + ["timestamp", "symbol", "timeframe", "spread", "real_volume"]
             ]
-            print(f"\n📈 Total features created: {len(feature_cols)}")
+            print(f"\n[Chart] Total features created: {len(feature_cols)}")
 
         except Exception as e:
-            print(f"\n❌ Error adding indicators: {e}")
+            print(f"\n[Error] Error adding indicators: {e}")
             import traceback
 
             traceback.print_exc()
@@ -585,14 +585,14 @@ def main():
     data_file = Path("data/raw/XAUUSD_M15_20251101_172509.csv")
 
     if not data_file.exists():
-        print(f"❌ Data file not found: {data_file}")
+        print(f"[Error] Data file not found: {data_file}")
         print("Please run: python collect_all_timeframes.py")
         return
 
     # Load data
     print(f"\n📂 Loading data from: {data_file}")
     df = pd.read_csv(data_file)
-    print(f"✅ Loaded {len(df)} bars")
+    print(f"[OK] Loaded {len(df)} bars")
 
     # Add indicators
     ti = TechnicalIndicators()
@@ -600,7 +600,7 @@ def main():
 
     # Show results
     print("\n" + "=" * 70)
-    print("📊 RESULTS")
+    print("[Stats] RESULTS")
     print("=" * 70)
     print(f"Original columns: {len(df.columns)}")
     print(f"With features: {len(df_features.columns)}")
@@ -619,16 +619,16 @@ def main():
     output_file = output_dir / "XAUUSD_M15_with_features.csv"
     df_features.to_csv(output_file, index=False)
 
-    print(f"\n💾 Saved to: {output_file}")
+    print(f"\n[Save] Saved to: {output_file}")
     print(f"   Rows: {len(df_features)}")
     print(f"   Columns: {len(df_features.columns)}")
 
     # Show sample
-    print("\n📊 Sample data (last 5 rows, selected columns):")
+    print("\n[Stats] Sample data (last 5 rows, selected columns):")
     sample_cols = ["timestamp", "close", "RSI_14", "MACD", "BB_pct_b", "ATR_14"]
     print(df_features[sample_cols].tail())
 
-    print("\n✅ Technical Indicators module ready!")
+    print("\n[OK] Technical Indicators module ready!")
 
 
 if __name__ == "__main__":

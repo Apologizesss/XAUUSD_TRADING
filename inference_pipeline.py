@@ -45,7 +45,7 @@ class TradingInference:
         scaler_path: str = "results/xgboost/xgboost_scaler.pkl",
         confidence_threshold: float = 0.70,
         symbol: str = "XAUUSD",
-        timeframe: str = "H1",
+        timeframe: str = "M5",
     ):
         """
         Initialize inference pipeline

@@ -1,7 +1,7 @@
 """
 Live Trading System - Execute Real Orders on MT5
 ================================================
-⚠️ WARNING: This script executes REAL trades on MT5!
+[WARNING] WARNING: This script executes REAL trades on MT5!
 Use with Demo Account first to test thoroughly.
 
 Features:
@@ -65,7 +65,7 @@ class LiveTrading:
             log_dir: Directory for logs
         """
         print("=" * 70)
-        print("⚠️  LIVE TRADING SYSTEM - REAL MONEY AT RISK ⚠️")
+        print("[WARNING]  LIVE TRADING SYSTEM - REAL MONEY AT RISK [WARNING]")
         print("=" * 70)
         print()
 
@@ -106,7 +106,7 @@ class LiveTrading:
         self.account_currency = account_info.currency
         self.is_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
 
-        print(f"Account Type: {'DEMO' if self.is_demo else '🔴 REAL'}")
+        print(f"Account Type: {'DEMO' if self.is_demo else '[REAL] REAL'}")
         print(f"Balance: {self.initial_balance:.2f} {self.account_currency}")
         print(f"Symbol: {symbol}")
         print(f"Timeframe: {timeframe}")
@@ -119,9 +119,9 @@ class LiveTrading:
 
         # Safety confirmation
         if not self.is_demo:
-            print("⚠️" * 35)
+            print("[WARNING]" * 35)
             print("WARNING: THIS IS A REAL ACCOUNT!")
-            print("⚠️" * 35)
+            print("[WARNING]" * 35)
             print()
             response = input(
                 "Are you ABSOLUTELY SURE you want to trade with REAL MONEY? (type 'YES' to continue): "
@@ -142,7 +142,7 @@ class LiveTrading:
         self.state_file = self.log_dir / "live_trading_state.json"
         self.load_state()
 
-        print("✓ Live trading system initialized")
+        print("[OK] Live trading system initialized")
         print()
 
     def ensure_mt5_connected(self) -> bool:
@@ -156,14 +156,14 @@ class LiveTrading:
         if mt5.terminal_info() is not None:
             return True
 
-        print("  ⚠️ MT5 connection lost, reconnecting...")
+        print("  [WARNING] MT5 connection lost, reconnecting...")
 
         # Try to reconnect
         if not mt5.initialize():
-            print(f"  ❌ MT5 reconnection failed: {mt5.last_error()}")
+            print(f"  [ERROR] MT5 reconnection failed: {mt5.last_error()}")
             return False
 
-        print("  ✓ MT5 reconnected successfully")
+        print("  [OK] MT5 reconnected successfully")
         return True
 
     def get_symbol_info(self) -> Optional[Dict]:
@@ -251,21 +251,21 @@ class LiveTrading:
         """
         # Ensure MT5 is connected
         if not self.ensure_mt5_connected():
-            print(f"  ❌ Cannot place order: MT5 not connected")
+            print(f"  [ERROR] Cannot place order: MT5 not connected")
             return None
 
         # Use fixed lot size
         lots = self.fixed_lot
-        print(f"  💡 Using fixed lot size: {lots:.2f}")
+        print(f"  [Tip] Using fixed lot size: {lots:.2f}")
 
         if lots <= 0:
-            print(f"  ❌ Invalid position size: {lots}")
+            print(f"  [ERROR] Invalid position size: {lots}")
             return None
 
         # Get current price
         tick = mt5.symbol_info_tick(self.symbol)
         if tick is None:
-            print(f"  ❌ Failed to get tick for {self.symbol}")
+            print(f"  [ERROR] Failed to get tick for {self.symbol}")
             return None
 
         # Determine order type and price
@@ -276,7 +276,7 @@ class LiveTrading:
             order_type = mt5.ORDER_TYPE_SELL
             price = tick.bid
         else:
-            print(f"  ❌ Invalid direction: {direction}")
+            print(f"  [ERROR] Invalid direction: {direction}")
             return None
 
         # Prepare request
@@ -299,26 +299,26 @@ class LiveTrading:
         print(f"     SL: {stop_loss:.2f} | TP: {take_profit:.2f}")
 
         # DEBUG: Show full request
-        print(f"\n  🔍 DEBUG - Order Request:")
+        print(f"\n  [Info] DEBUG - Order Request:")
         for key, value in request.items():
             print(f"     {key}: {value}")
         print()
 
         # Send order
-        print(f"  🔄 Calling mt5.order_send()...")
+        print(f"  [Processing] Calling mt5.order_send()...")
         result = mt5.order_send(request)
-        print(f"  ✓ order_send() returned: {result}")
+        print(f"  [OK] order_send() returned: {result}")
 
         if result is None:
-            print(f"  ❌ Order failed: No result from MT5")
-            print(f"  🔍 Last error: {mt5.last_error()}")
+            print(f"  [ERROR] Order failed: No result from MT5")
+            print(f"  [Info] Last error: {mt5.last_error()}")
             return None
 
-        print(f"  🔍 Result retcode: {result.retcode}")
-        print(f"  🔍 Expected: {mt5.TRADE_RETCODE_DONE}")
+        print(f"  [Info] Result retcode: {result.retcode}")
+        print(f"  [Info] Expected: {mt5.TRADE_RETCODE_DONE}")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"  ❌ Order failed!")
+            print(f"  [ERROR] Order failed!")
             print(f"     Return code: {result.retcode}")
             print(f"     Comment: {result.comment}")
             print(f"     Request ID: {result.request_id}")
@@ -367,18 +367,18 @@ class LiveTrading:
 
         # Ensure MT5 is connected
         if not self.ensure_mt5_connected():
-            print(f"  ❌ MT5 not connected!")
+            print(f"  [ERROR] MT5 not connected!")
             return False
 
         # Check daily loss limit
         account_info = mt5.account_info()
         if account_info is None:
-            print(f"  🔍 DEBUG: account_info is None after connection check!")
-            print(f"  🔍 Terminal info: {mt5.terminal_info()}")
-            print(f"  🔍 Last error: {mt5.last_error()}")
+            print(f"  [Info] DEBUG: account_info is None after connection check!")
+            print(f"  [Info] Terminal info: {mt5.terminal_info()}")
+            print(f"  [Info] Last error: {mt5.last_error()}")
             return False
 
-        print(f"  🔍 DEBUG: Account Info")
+        print(f"  [Info] DEBUG: Account Info")
         print(f"     Initial Balance: {self.initial_balance:.2f}")
         print(f"     Current Balance: {account_info.balance:.2f}")
 
@@ -391,14 +391,14 @@ class LiveTrading:
 
         if daily_loss_pct >= self.max_daily_loss:
             if self.is_trading_enabled:
-                print(f"\n🛑 DAILY LOSS LIMIT REACHED: {daily_loss_pct:.2%}")
+                print(f"\n[Stop] DAILY LOSS LIMIT REACHED: {daily_loss_pct:.2%}")
                 print(f"   Trading disabled for today.")
                 self.is_trading_enabled = False
             return False
 
         # Check max positions
         positions = mt5.positions_get(symbol=self.symbol)
-        print(f"  🔍 DEBUG: Checking positions for {self.symbol}")
+        print(f"  [Info] DEBUG: Checking positions for {self.symbol}")
         print(f"     Positions result: {positions}")
 
         if positions is None:
@@ -418,10 +418,12 @@ class LiveTrading:
         print(f"     Max positions allowed: {self.max_positions}")
 
         if num_positions >= self.max_positions:
-            print(f"  ⚠️ Max positions reached ({num_positions}/{self.max_positions})")
+            print(
+                f"  [WARNING] Max positions reached ({num_positions}/{self.max_positions})"
+            )
             return False
 
-        print(f"  ✓ All checks passed!")
+        print(f"  [OK] All checks passed!")
         return True
 
     def process_signal(self, signal: Dict) -> bool:
@@ -434,7 +436,7 @@ class LiveTrading:
         Returns:
             True if order placed, False otherwise
         """
-        print(f"\n  🔍 DEBUG: process_signal called")
+        print(f"\n  [Info] DEBUG: process_signal called")
         print(f"     Direction: {signal.get('direction')}")
         print(f"     should_trade: {signal.get('should_trade', False)}")
         print(f"     entry_price: {signal.get('entry_price')}")
@@ -450,14 +452,14 @@ class LiveTrading:
             print("  ⚪ Neutral signal - skipping")
             return False
 
-        print(f"  ✓ Non-neutral signal: {direction}")
+        print(f"  [OK] Non-neutral signal: {direction}")
 
         # Check daily limits
-        print(f"  🔍 Checking daily limits...")
+        print(f"  [Info] Checking daily limits...")
         if not self.check_daily_limits():
-            print(f"  ❌ Daily limits check failed")
+            print(f"  [ERROR] Daily limits check failed")
             return False
-        print(f"  ✓ Daily limits OK")
+        print(f"  [OK] Daily limits OK")
 
         # Extract signal info
         entry_price = signal.get("entry_price")
@@ -467,7 +469,7 @@ class LiveTrading:
         prob_up = signal.get("probability_up", 0.5)
 
         if None in [entry_price, stop_loss, take_profit]:
-            print(f"  ❌ Invalid signal: Missing price levels")
+            print(f"  [ERROR] Invalid signal: Missing price levels")
             print(f"     entry_price: {entry_price}")
             print(f"     stop_loss: {stop_loss}")
             print(f"     take_profit: {take_profit}")
@@ -495,12 +497,12 @@ class LiveTrading:
             print(f"  ✅ place_order() succeeded!")
             return True
         else:
-            print(f"  ❌ place_order() failed!")
+            print(f"  [ERROR] place_order() failed!")
             return False
 
     def monitor_positions(self):
         """Monitor and log open positions, close if profit target reached"""
-        print(f"\n  📊 Monitoring positions...")
+        print(f"\n  [Stats] Monitoring positions...")
 
         positions = mt5.positions_get(symbol=self.symbol)
 
@@ -534,7 +536,7 @@ class LiveTrading:
             # Check stop loss
             elif pnl <= self.stop_loss_amount:
                 print(
-                    f"   🛑 STOP LOSS HIT! (${pnl:.2f} <= ${self.stop_loss_amount:.2f})"
+                    f"   [Stop] STOP LOSS HIT! (${pnl:.2f} <= ${self.stop_loss_amount:.2f})"
                 )
                 positions_to_close.append(pos)
 
@@ -588,7 +590,7 @@ class LiveTrading:
             return signal
 
         except Exception as e:
-            print(f"  ❌ Inference error: {e}")
+            print(f"  [ERROR] Inference error: {e}")
             import traceback
 
             traceback.print_exc()
@@ -635,7 +637,7 @@ class LiveTrading:
                 self.last_check_date = datetime.fromisoformat(last_date).date()
             self.is_trading_enabled = state.get("is_trading_enabled", True)
 
-            print("✓ State loaded from previous session")
+            print("[OK] State loaded from previous session")
         except Exception as e:
             print(f"Warning: Could not load state: {e}")
 
@@ -650,7 +652,7 @@ class LiveTrading:
             duration_minutes: Run duration in minutes (None = indefinite)
         """
         print("=" * 70)
-        print("🚀 STARTING LIVE TRADING")
+        print("[Launch] STARTING LIVE TRADING")
         print("=" * 70)
         print(f"Check interval: {check_interval_seconds}s")
         print(
@@ -677,19 +679,19 @@ class LiveTrading:
                     elapsed = (current_time - start_time).total_seconds() / 60
                     if elapsed >= duration_minutes:
                         print(
-                            f"\n⏰ Duration limit reached ({duration_minutes} minutes)"
+                            f"\n[Time] Duration limit reached ({duration_minutes} minutes)"
                         )
                         break
 
                 # Run inference
-                print("  🔮 Running inference...")
+                print("  [Predict] Running inference...")
                 signal = self.run_inference()
 
                 if signal is not None:
                     # Process signal
                     self.process_signal(signal)
                 else:
-                    print("  ⚠️ No signal generated")
+                    print("  [WARNING] No signal generated")
 
                 # Monitor positions
                 self.monitor_positions()
@@ -701,26 +703,26 @@ class LiveTrading:
                 account_info = mt5.account_info()
                 if account_info:
                     print(
-                        f"  💰 Balance: {account_info.balance:.2f} {self.account_currency}"
+                        f"  [Money] Balance: {account_info.balance:.2f} {self.account_currency}"
                     )
                     print(
                         f"  📈 Equity: {account_info.equity:.2f} {self.account_currency}"
                     )
                     pnl_today = account_info.balance - self.initial_balance
                     print(
-                        f"  {'📉' if pnl_today < 0 else '📊'} P&L Today: {pnl_today:+.2f} {self.account_currency}"
+                        f"  {'[Down]' if pnl_today < 0 else '[Stats]'} P&L Today: {pnl_today:+.2f} {self.account_currency}"
                     )
 
                 print()
 
                 # Wait for next check
-                print(f"  ⏳ Next check in {check_interval_seconds}s...")
+                print(f"  [Wait] Next check in {check_interval_seconds}s...")
                 time.sleep(check_interval_seconds)
 
         except KeyboardInterrupt:
-            print("\n\n🛑 Live trading stopped by user")
+            print("\n\n[Stop] Live trading stopped by user")
         except Exception as e:
-            print(f"\n\n❌ Error: {e}")
+            print(f"\n\n[ERROR] Error: {e}")
             import traceback
 
             traceback.print_exc()
@@ -754,8 +756,8 @@ class LiveTrading:
         # self.close_all_positions()
 
         mt5.shutdown()
-        print("\n✓ MT5 connection closed")
-        print("✓ Live trading stopped safely")
+        print("\n[OK] MT5 connection closed")
+        print("[OK] Live trading stopped safely")
 
     def close_all_positions(self):
         """Close all open positions (emergency function)"""
@@ -765,7 +767,7 @@ class LiveTrading:
             print("No positions to close")
             return
 
-        print(f"\n⚠️ Closing {len(positions)} positions...")
+        print(f"\n[WARNING] Closing {len(positions)} positions...")
 
         for pos in positions:
             direction = "SELL" if pos.type == mt5.ORDER_TYPE_BUY else "BUY"
@@ -794,7 +796,7 @@ class LiveTrading:
 
             result = mt5.order_send(request)
             if result.retcode == mt5.TRADE_RETCODE_DONE:
-                print(f"  ✓ Closed position {pos.ticket}")
+                print(f"  [OK] Closed position {pos.ticket}")
             else:
                 print(f"  ✗ Failed to close {pos.ticket}: {result.comment}")
 
@@ -806,7 +808,7 @@ class LiveTrading:
             position: Position object from MT5
         """
         if not self.ensure_mt5_connected():
-            print(f"  ❌ Cannot close position: MT5 not connected")
+            print(f"  [ERROR] Cannot close position: MT5 not connected")
             return False
 
         ticket = position.ticket
@@ -823,7 +825,7 @@ class LiveTrading:
         # Get current price
         tick = mt5.symbol_info_tick(self.symbol)
         if tick is None:
-            print(f"  ❌ Failed to get tick for closing position {ticket}")
+            print(f"  [ERROR] Failed to get tick for closing position {ticket}")
             return False
 
         price = tick.bid if pos_type == mt5.ORDER_TYPE_BUY else tick.ask
@@ -843,15 +845,15 @@ class LiveTrading:
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
 
-        print(f"  🔄 Closing position {ticket}...")
+        print(f"  [Processing] Closing position {ticket}...")
         result = mt5.order_send(request)
 
         if result is None:
-            print(f"  ❌ Close failed: No result from MT5")
+            print(f"  [ERROR] Close failed: No result from MT5")
             return False
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"  ❌ Close failed: {result.retcode} - {result.comment}")
+            print(f"  [ERROR] Close failed: {result.retcode} - {result.comment}")
             return False
 
         print(f"  ✅ Position {ticket} closed successfully!")
@@ -867,7 +869,7 @@ def main():
     )
     parser.add_argument("--symbol", "-s", default="XAUUSD", help="Trading symbol")
     parser.add_argument(
-        "--timeframe", "-t", default="H1", help="Timeframe (M5, H1, H4)"
+        "--timeframe", "-t", default="M5", help="Timeframe (M5, H1, H4)"
     )
     parser.add_argument(
         "--threshold",

@@ -78,6 +78,7 @@ def main():
     # Files to fix
     files_to_fix = [
         "src/features/feature_pipeline.py",
+        "src/features/technical_indicators.py",
         "collect_more_data.py",
         "daily_update.py",
         "train_simple.py",
