@@ -10,34 +10,42 @@ Daily Trading Update Script
 วิธีใช้: python daily_update.py
 """
 
-import MetaTrader5 as mt5
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import json
 import os
-from pathlib import Path
 import pickle
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import MetaTrader5 as mt5
+import numpy as np
+import pandas as pd
 
 # Import โมดูลที่มีอยู่
 from src.data_collection.mt5_collector import MT5Collector
+from src.data_collection.news_collector import NewsCollector
 from src.features.feature_pipeline import FeaturePipeline
+from src.features.news_features import NewsSentimentFeatures
 from src.models.data_preprocessor import DataPreprocessor
 
 
 class DailyUpdater:
     def __init__(self):
         self.data_dir = Path("data")
+        self.news_dir = Path("data/news")
         self.results_dir = Path("results")
         self.models_dir = Path("models")
         self.logs_dir = Path("logs")
 
         # สร้างโฟลเดอร์ถ้ายังไม่มี
-        for dir_path in [self.data_dir, self.results_dir, self.logs_dir]:
+        for dir_path in [self.data_dir, self.news_dir, self.results_dir, self.logs_dir]:
             dir_path.mkdir(exist_ok=True)
 
         self.symbol = "XAUUSD"
-        self.timeframe = mt5.TIMEFRAME_H1
+        self.timeframe = mt5.TIMEFRAME_M5
+
+        # News collector
+        self.news_collector = NewsCollector()
+        self.sentiment_features = NewsSentimentFeatures()
 
     def collect_new_data(self, days=7):
         """ดึงข้อมูลใหม่จาก MT5"""
@@ -45,7 +53,7 @@ class DailyUpdater:
         print("📥 ขั้นตอนที่ 1: ดึงข้อมูลใหม่จาก MT5")
         print("=" * 60)
 
-        collector = MT5Collector(symbol=self.symbol, timeframe="H1")
+        collector = MT5Collector(symbol=self.symbol, timeframe="M5")
 
         if not collector.initialize():
             print("[Error] ไม่สามารถเชื่อมต่อ MT5 ได้")
@@ -183,7 +191,41 @@ class DailyUpdater:
 
         return metrics
 
-    def prepare_training_data(self, df):
+    def collect_news(self, days=7):
+        """ดึงข่าวและวิเคราะห์ sentiment"""
+        print("\n" + "=" * 60)
+        print("📰 ขั้นตอนที่ 2.5: ดึงข่าวและวิเคราะห์ Sentiment")
+        print("=" * 60)
+
+        try:
+            # ดึงข่าว
+            df_news = self.news_collector.get_gold_news(days=days)
+
+            if df_news.empty:
+                print("⚠️ ไม่สามารถดึงข่าวได้")
+                return None
+
+            # บันทึก
+            news_file = self.news_dir / f"news_{datetime.now().strftime('%Y%m%d')}.csv"
+            df_news.to_csv(news_file, index=False)
+            print(f"💾 บันทึกข่าว: {news_file}")
+            print(f"   จำนวน: {len(df_news)} บทความ")
+
+            # แสดง sentiment summary
+            if "sentiment" in df_news.columns:
+                print(f"\n📊 Sentiment Summary:")
+                for sentiment, count in df_news["sentiment"].value_counts().items():
+                    percentage = (count / len(df_news)) * 100
+                    print(f"   {sentiment.capitalize()}: {count} ({percentage:.1f}%)")
+                print(f"   Average Polarity: {df_news['polarity'].mean():.4f}")
+
+            return news_file
+
+        except Exception as e:
+            print(f"❌ Error collecting news: {e}")
+            return None
+
+    def prepare_training_data(self, df, news_file=None):
         """เตรียมข้อมูลสำหรับเทรน"""
         print("\n" + "=" * 60)
         print("[Feature Engineering] ขั้นตอนที่ 3: เตรียมข้อมูลสำหรับเทรน")
@@ -200,6 +242,20 @@ class DailyUpdater:
         df_features = pipeline.add_features(df)
 
         print(f"[OK] สร้าง features เสร็จ: {len(df_features.columns)} features")
+
+        # เพิ่ม sentiment features (ถ้ามีข่าว)
+        if news_file and news_file.exists():
+            print(f"\n📰 เพิ่ม Sentiment Features...")
+            try:
+                df_features = self.sentiment_features.merge_price_and_news(
+                    df_features, str(news_file), windows=[1, 4, 12, 24]
+                )
+                print(f"✅ เพิ่ม sentiment features สำเร็จ")
+                print(f"   Total features: {len(df_features.columns)}")
+            except Exception as e:
+                print(f"⚠️ ไม่สามารถเพิ่ม sentiment features: {e}")
+        else:
+            print(f"\n⚠️ ไม่มีข่าว - ข้าม sentiment features")
 
         # สร้าง target (ราคาขึ้นใน 4 ชั่วโมงข้างหน้า)
         df_features["future_price"] = df_features["close"].shift(-4)
@@ -292,7 +348,9 @@ class DailyUpdater:
             final_val_acc = history.history["val_accuracy"][-1]
 
             print(f"[OK] อัพเดท model เสร็จสิ้น")
-            print(f"[Stats] Accuracy: {final_acc:.4f} | Val Accuracy: {final_val_acc:.4f}")
+            print(
+                f"[Stats] Accuracy: {final_acc:.4f} | Val Accuracy: {final_val_acc:.4f}"
+            )
 
             # บันทึก model ใหม่
             new_model_name = (
@@ -360,19 +418,22 @@ class DailyUpdater:
     def run(self):
         """รันกระบวนการทั้งหมด"""
         print("\n" + "[Launch]" * 30)
-        print("           DAILY UPDATE SCRIPT - Gold Trading Bot")
+        print("           DAILY UPDATE SCRIPT - Gold Trading Bot (with News)")
         print("[Launch]" * 30 + "\n")
 
         try:
-            # 1. ดึงข้อมูลใหม่
+            # 1. ดึงข้อมูลราคาใหม่
             df = self.collect_new_data(days=7)
 
             # 2. วิเคราะห์ผลการเทรด
             metrics = self.analyze_trading_performance()
 
-            # 3. เตรียมข้อมูลและ update model
+            # 2.5. ดึงข่าวและวิเคราะห์ sentiment (NEW!)
+            news_file = self.collect_news(days=7)
+
+            # 3. เตรียมข้อมูลและ update model (พร้อม sentiment features)
             if df is not None and len(df) > 0:
-                df_processed = self.prepare_training_data(df)
+                df_processed = self.prepare_training_data(df, news_file=news_file)
 
                 if df_processed is not None and len(df_processed) > 50:
                     self.update_existing_model(df_processed)
@@ -387,7 +448,7 @@ class DailyUpdater:
             self.create_daily_summary(metrics)
 
             print("\n" + "=" * 60)
-            print("[OK] อัพเดทประจำวันเสร็จสมบูรณ์!")
+            print("[OK] อัพเดทประจำวันเสร็จสมบูรณ์! (พร้อม News Sentiment)")
             print("=" * 60)
 
         except Exception as e:

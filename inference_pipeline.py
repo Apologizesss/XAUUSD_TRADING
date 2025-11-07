@@ -14,11 +14,12 @@ Features:
 """
 
 import sys
-from pathlib import Path
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import warnings
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
@@ -26,9 +27,10 @@ warnings.filterwarnings("ignore")
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-import joblib
 import json
 from typing import Dict, Optional, Tuple
+
+import joblib
 
 # Import FeaturePipeline for consistent feature engineering
 from src.features.feature_pipeline import FeaturePipeline
@@ -221,6 +223,9 @@ class TradingInference:
         # Keep OHLCV columns as they were used in training
         # Must match exactly 138 features from training data
 
+        # Initialize feature_cols
+        feature_cols = []
+
         # First, get the expected training features
         training_file = Path(
             "data/processed/XAUUSD_M5_features_complete_target_trend_5.csv"
@@ -253,6 +258,14 @@ class TradingInference:
                 ]
                 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
                 feature_cols = [col for col in numeric_cols if col not in exclude_cols]
+        else:
+            # No training file - use all numeric columns except metadata
+            exclude_cols = [
+                "target",
+                "time",  # MT5 timestamp (numeric but not a feature)
+            ]
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            feature_cols = [col for col in numeric_cols if col not in exclude_cols]
 
         if len(feature_cols) == 0:
             print("ERROR: No feature columns found!")

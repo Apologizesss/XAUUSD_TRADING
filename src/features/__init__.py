@@ -28,14 +28,16 @@ Feature Categories:
 - Statistical Features: Returns, volatility, skewness, kurtosis
 """
 
+from .feature_pipeline import FeaturePipeline
+from .news_features import NewsSentimentFeatures
 from .technical_indicators import TechnicalIndicators
 from .time_features import TimeFeatures
-from .feature_pipeline import FeaturePipeline
 
 __all__ = [
     "TechnicalIndicators",
     "TimeFeatures",
     "FeaturePipeline",
+    "NewsSentimentFeatures",
 ]
 
 __version__ = "1.0.0"

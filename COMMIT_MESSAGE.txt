@@ -1,0 +1,79 @@
+🚀 Major Update: Live Trading Display & News Sentiment System
+
+📊 Features Added:
+- ✨ Real-time status display with emoji indicators
+- 📰 News sentiment analysis integration
+- 🔄 Unbuffered output for immediate feedback
+- 👁️ Step-by-step progress tracking
+- 💰 Enhanced account status monitoring
+
+🔧 Improvements:
+- Added flush=True to all print statements for instant display
+- Created early loading messages before heavy module imports
+- Implemented detailed progress indicators [1/4], [2/4], etc.
+- Enhanced error messages with clear icons (✅, ❌, ⚠️, 🔄)
+- Better structured output with separator lines
+
+📝 New Files:
+- run_live_trading.bat - Easy launcher with unbuffered output
+- git_push.bat - Automated git push script
+- test_live_display.py - Test visual output before live trading
+- HOW_TO_RUN_LIVE_TRADING.md - Complete usage guide
+- setup_env.py - Environment configuration helper
+- check_env.py - Environment validation tool
+
+🔧 Modified Files:
+- live_trading.py - Added comprehensive status messages
+- inference_pipeline.py - Enhanced loading feedback
+- daily_update.py - Improved output formatting
+- src/data_collection/__init__.py - Module organization
+- src/features/__init__.py - Feature exports
+
+🎯 News Sentiment System:
+- Automated news collection from Forex Factory
+- BERT-based sentiment analysis
+- Real-time trading signal filtering based on news
+- Configurable sentiment thresholds
+- News update intervals (default: 10 minutes)
+
+🐛 Bug Fixes:
+- Fixed output buffering issue causing silent execution
+- Resolved UTF-8 encoding problems on Windows
+- Fixed module import sequence for better feedback
+- Corrected MT5 connection status messages
+
+📚 Documentation:
+- Added detailed running instructions
+- Created troubleshooting guide
+- Included parameter reference table
+- Added usage examples for different scenarios
+
+🔒 Safety Features:
+- Confirmation prompt for real accounts
+- Demo account detection and warnings
+- Daily loss limits tracking
+- Position monitoring with P&L display
+- Safe shutdown with Ctrl+C
+
+⚡ Performance:
+- Optimized module loading sequence
+- Reduced initialization time visibility
+- Better progress feedback during long operations
+- Improved user experience with real-time updates
+
+🎨 User Experience:
+- Clear emoji-based status indicators
+- Structured output with borders
+- Progress bars for multi-step operations
+- Next check time countdown
+- Easy-to-read account summaries
+
+💡 Usage:
+Run with: run_live_trading.bat
+Or: python -u live_trading.py --interval 300 --threshold 0.70
+
+📌 Notes:
+- Requires MetaTrader 5 running
+- Use DEMO account for testing first
+- Model loading takes 10-30 seconds
+- Press Ctrl+C to stop safely

@@ -12,21 +12,67 @@ Features:
 - Emergency stop mechanisms
 """
 
-import sys
-from pathlib import Path
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import time
+import io
 import json
+import sys
+import time
+
+# Fix Windows console encoding for emoji support
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+# Force unbuffered output so messages show immediately
+sys.stdout.reconfigure(line_buffering=True)
+
+# Show early loading message BEFORE importing heavy modules
+print("\n" + "=" * 70, flush=True)
+print("🤖 AI GOLD TRADING BOT - LIVE TRADING SYSTEM", flush=True)
+print("=" * 70, flush=True)
+print("⚠️  WARNING: REAL MONEY AT RISK - USE DEMO ACCOUNT FIRST!", flush=True)
+print("=" * 70, flush=True)
+print("", flush=True)
+print("🔄 LOADING MODULES... (this may take 10-30 seconds)", flush=True)
+print("", flush=True)
+
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional
+
+print("   ✅ Basic modules loaded", flush=True)
+print("   🔄 Loading MetaTrader5...", flush=True)
 import MetaTrader5 as mt5
-from typing import Dict, Optional, List
+
+print("   ✅ MetaTrader5 loaded", flush=True)
+
+print("   🔄 Loading NumPy and Pandas...", flush=True)
+import numpy as np
+import pandas as pd
+
+print("   ✅ NumPy and Pandas loaded", flush=True)
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+import pickle
+
+print("   🔄 Loading Joblib...", flush=True)
+import joblib
+
+print("   ✅ Joblib loaded", flush=True)
+
+print("   🔄 Loading Trading Inference Pipeline...", flush=True)
 from inference_pipeline import TradingInference
+
+print("   ✅ Inference Pipeline loaded", flush=True)
+
+print("   🔄 Loading News Collectors...", flush=True)
+from src.data_collection.news_collector import NewsCollector
+from src.features.news_features import NewsSentimentFeatures
+
+print("   ✅ All modules loaded!", flush=True)
+print("", flush=True)
 
 
 class LiveTrading:
@@ -38,8 +84,8 @@ class LiveTrading:
         self,
         symbol: str = "XAUUSD",
         timeframe: str = "M5",
-        model_path: str = "results/xgboost/xgboost_model.pkl",
-        scaler_path: str = "results/xgboost/xgboost_scaler.pkl",
+        model_path: str = "results/ensemble/ensemble_model.pkl",
+        scaler_path: str = "results/ensemble/ensemble_scaler.pkl",
         confidence_threshold: float = 0.70,
         risk_per_trade: float = 0.01,  # 1% risk per trade
         max_positions: int = 5,
@@ -49,6 +95,9 @@ class LiveTrading:
         log_dir: str = "logs/live_trading",
         test_mode: bool = False,  # Force signal for testing
         fixed_lot: float = 0.01,  # Fixed lot size (0.01 lots)
+        use_news_sentiment: bool = True,  # Use news sentiment analysis
+        news_sentiment_threshold: float = -0.3,  # Block trades if sentiment < -0.3
+        news_update_interval: int = 600,  # Update news every 600 seconds (10 min)
     ):
         """
         Initialize live trading system
@@ -64,10 +113,8 @@ class LiveTrading:
             max_daily_loss: Maximum daily loss as fraction (0.05 = 5%)
             log_dir: Directory for logs
         """
-        print("=" * 70)
-        print("[WARNING]  LIVE TRADING SYSTEM - REAL MONEY AT RISK [WARNING]")
-        print("=" * 70)
-        print()
+        print("🔄 INITIALIZING SYSTEM...", flush=True)
+        print("", flush=True)
 
         self.symbol = symbol
         self.timeframe = timeframe
@@ -79,12 +126,43 @@ class LiveTrading:
         self.stop_loss_amount = stop_loss_amount
         self.test_mode = test_mode
         self.fixed_lot = fixed_lot
+        self.use_news_sentiment = use_news_sentiment
+        self.news_sentiment_threshold = news_sentiment_threshold
+        self.news_update_interval = news_update_interval
 
         # Setup logging
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
+        # Initialize News Collectors
+        if self.use_news_sentiment:
+            print("📰 Initializing News Sentiment System...", flush=True)
+            print(
+                f"   📅 Update interval: {news_update_interval}s ({news_update_interval / 60:.0f} minutes)",
+                flush=True,
+            )
+            print("   🔄 [1/3] Loading News Collector...", flush=True)
+            self.news_collector = NewsCollector()
+            print("   ✅ [2/3] Loading Sentiment Features...", flush=True)
+            self.sentiment_features = NewsSentimentFeatures()
+            print("   🔄 [3/3] Creating news directory...", flush=True)
+            self.news_dir = Path("data/news")
+            self.news_dir.mkdir(parents=True, exist_ok=True)
+            self.last_news_update = None  # Track last news update time
+            self.cached_sentiment_info = None  # Cache sentiment info
+            print("✅ News system ready", flush=True)
+        else:
+            print("ℹ️  News sentiment disabled", flush=True)
+            self.news_collector = None
+            self.sentiment_features = None
+            self.last_news_update = None
+            self.cached_sentiment_info = None
+
         # Initialize inference pipeline
+        print("\n⚙️ Initializing Trading Inference Pipeline...", flush=True)
+        print(f"   Model: {model_path}", flush=True)
+        print(f"   Scaler: {scaler_path}", flush=True)
+        print("   🔄 Loading models (this may take 10-30 seconds)...", flush=True)
         self.inference = TradingInference(
             model_path=model_path,
             scaler_path=scaler_path,
@@ -92,6 +170,7 @@ class LiveTrading:
             symbol=symbol,
             timeframe=timeframe,
         )
+        print("✅ Inference pipeline ready", flush=True)
 
         # Initialize MT5
         if not mt5.initialize():
@@ -106,31 +185,37 @@ class LiveTrading:
         self.account_currency = account_info.currency
         self.is_demo = account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
 
-        print(f"Account Type: {'DEMO' if self.is_demo else '[REAL] REAL'}")
-        print(f"Balance: {self.initial_balance:.2f} {self.account_currency}")
-        print(f"Symbol: {symbol}")
-        print(f"Timeframe: {timeframe}")
-        print(f"Confidence Threshold: {confidence_threshold:.0%}")
-        print(f"Risk per Trade: {risk_per_trade:.0%}")
-        print(f"Max Daily Loss: {max_daily_loss:.0%}")
-        print(f"Profit Target: ${profit_target:.2f} per position")
-        print(f"Stop Loss: ${stop_loss_amount:.2f} per position")
-        print()
+        print("\n" + "=" * 70, flush=True)
+        print("ACCOUNT CONFIGURATION", flush=True)
+        print("=" * 70, flush=True)
+        print(f"Account Type: {'DEMO' if self.is_demo else '[REAL] REAL'}", flush=True)
+        print(
+            f"Balance: {self.initial_balance:.2f} {self.account_currency}", flush=True
+        )
+        print(f"Symbol: {symbol}", flush=True)
+        print(f"Timeframe: {timeframe}", flush=True)
+        print(f"Confidence Threshold: {confidence_threshold:.0%}", flush=True)
+        print(f"Risk per Trade: {risk_per_trade:.0%}", flush=True)
+        print(f"Max Daily Loss: {max_daily_loss:.0%}", flush=True)
+        print(f"Profit Target: ${profit_target:.2f} per position", flush=True)
+        print(f"Stop Loss: ${stop_loss_amount:.2f} per position", flush=True)
+        print("=" * 70, flush=True)
+        print("", flush=True)
 
         # Safety confirmation
         if not self.is_demo:
-            print("[WARNING]" * 35)
-            print("WARNING: THIS IS A REAL ACCOUNT!")
-            print("[WARNING]" * 35)
-            print()
+            print("[WARNING]" * 35, flush=True)
+            print("WARNING: THIS IS A REAL ACCOUNT!", flush=True)
+            print("[WARNING]" * 35, flush=True)
+            print("", flush=True)
             response = input(
                 "Are you ABSOLUTELY SURE you want to trade with REAL MONEY? (type 'YES' to continue): "
             )
             if response != "YES":
-                print("Live trading cancelled.")
+                print("Live trading cancelled.", flush=True)
                 mt5.shutdown()
                 sys.exit(0)
-            print()
+            print("", flush=True)
 
         # Trading state
         self.trades_today = []
@@ -142,8 +227,8 @@ class LiveTrading:
         self.state_file = self.log_dir / "live_trading_state.json"
         self.load_state()
 
-        print("[OK] Live trading system initialized")
-        print()
+        print("[OK] Live trading system initialized", flush=True)
+        print("", flush=True)
 
     def ensure_mt5_connected(self) -> bool:
         """
@@ -426,12 +511,13 @@ class LiveTrading:
         print(f"  [OK] All checks passed!")
         return True
 
-    def process_signal(self, signal: Dict) -> bool:
+    def process_signal(self, signal: Dict, sentiment_info: Dict = None) -> bool:
         """
         Process trading signal and execute if valid
 
         Args:
             signal: Signal dictionary from inference
+            sentiment_info: News sentiment info (optional)
 
         Returns:
             True if order placed, False otherwise
@@ -453,6 +539,21 @@ class LiveTrading:
             return False
 
         print(f"  [OK] Non-neutral signal: {direction}")
+
+        # Check news sentiment BEFORE trading
+        if sentiment_info is None:
+            sentiment_info = self.check_news_sentiment()
+
+        if not sentiment_info["allow_trading"]:
+            print(f"  🚫 Trade BLOCKED by news sentiment!")
+            print(f"     Reason: {sentiment_info['reason']}")
+            return False
+
+        print(f"  ✅ News sentiment check passed")
+        if sentiment_info["news_count"] > 0:
+            print(
+                f"     Sentiment: {sentiment_info['sentiment_label']} ({sentiment_info['sentiment_score']:.4f})"
+            )
 
         # Check daily limits
         print(f"  [Info] Checking daily limits...")
@@ -500,6 +601,167 @@ class LiveTrading:
             print(f"  [ERROR] place_order() failed!")
             return False
 
+    def check_news_sentiment(self, force_update: bool = False) -> Dict:
+        """
+        Check latest news sentiment before trading (with caching)
+
+        Args:
+            force_update: Force fetch new news even if cache is valid
+
+        Returns:
+            Dict with sentiment info: {
+                'allow_trading': bool,
+                'sentiment_score': float,
+                'sentiment_label': str,
+                'news_count': int,
+                'news_file': str,
+                'reason': str
+            }
+        """
+        if not self.use_news_sentiment:
+            return {
+                "allow_trading": True,
+                "sentiment_score": 0.0,
+                "sentiment_label": "NEUTRAL",
+                "news_count": 0,
+                "news_file": None,
+                "reason": "News sentiment disabled",
+            }
+
+        # Check if we can use cached news
+        now = datetime.now()
+        if (
+            not force_update
+            and self.last_news_update is not None
+            and self.cached_sentiment_info is not None
+        ):
+            time_since_update = (now - self.last_news_update).total_seconds()
+            if time_since_update < self.news_update_interval:
+                print(
+                    f"\n  📰 Using cached news (updated {time_since_update:.0f}s ago)"
+                )
+                return self.cached_sentiment_info
+
+        try:
+            print(
+                f"\n  📰 Fetching latest news (every {self.news_update_interval / 60:.0f} min)..."
+            )
+
+            # Fetch latest news (last 1 day)
+            df_news = self.news_collector.get_gold_news(days=1)
+
+            # Save news to file for sentiment features
+            news_file = None
+            if not df_news.empty:
+                news_file = str(
+                    self.news_dir
+                    / f"live_news_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+                )
+                df_news.to_csv(news_file, index=False)
+                print(f"     💾 Saved {len(df_news)} news articles")
+
+            if df_news.empty:
+                print("     ⚠️ No news available")
+                sentiment_info = {
+                    "allow_trading": True,
+                    "sentiment_score": 0.0,
+                    "sentiment_label": "NEUTRAL",
+                    "news_count": 0,
+                    "news_file": None,
+                    "reason": "No news available",
+                }
+                self.cached_sentiment_info = sentiment_info
+                self.last_news_update = datetime.now()
+                return sentiment_info
+
+            # Filter news from last 1 hour
+            now = pd.Timestamp.now(tz="UTC")
+            one_hour_ago = now - pd.Timedelta(hours=1)
+
+            # Ensure timestamp column has timezone
+            if df_news["timestamp"].dt.tz is None:
+                df_news["timestamp"] = pd.to_datetime(
+                    df_news["timestamp"]
+                ).dt.tz_localize("UTC")
+            else:
+                df_news["timestamp"] = pd.to_datetime(df_news["timestamp"])
+
+            recent_news = df_news[df_news["timestamp"] >= one_hour_ago]
+
+            if recent_news.empty:
+                print("     ℹ️ No recent news (last 1 hour)")
+                sentiment_info = {
+                    "allow_trading": True,
+                    "sentiment_score": 0.0,
+                    "sentiment_label": "NEUTRAL",
+                    "news_count": 0,
+                    "news_file": news_file,
+                    "reason": "No recent news",
+                }
+                self.cached_sentiment_info = sentiment_info
+                self.last_news_update = datetime.now()
+                return sentiment_info
+
+            # Calculate average sentiment
+            avg_polarity = recent_news["polarity"].mean()
+            sentiment_counts = recent_news["sentiment"].value_counts()
+
+            # Determine overall sentiment
+            if avg_polarity > 0.1:
+                sentiment_label = "POSITIVE"
+            elif avg_polarity < -0.1:
+                sentiment_label = "NEGATIVE"
+            else:
+                sentiment_label = "NEUTRAL"
+
+            # Check if sentiment is too negative
+            allow_trading = avg_polarity >= self.news_sentiment_threshold
+
+            print(f"     News Count: {len(recent_news)}")
+            print(f"     Avg Polarity: {avg_polarity:.4f}")
+            print(f"     Sentiment: {sentiment_label}")
+
+            if sentiment_counts is not None and len(sentiment_counts) > 0:
+                for sent, count in sentiment_counts.items():
+                    print(f"       {sent}: {count}")
+
+            if not allow_trading:
+                print(f"     🚫 Trading BLOCKED due to negative sentiment!")
+                reason = f"Negative sentiment: {avg_polarity:.4f} < {self.news_sentiment_threshold}"
+            else:
+                print(f"     ✅ Sentiment OK for trading")
+                reason = f"Sentiment acceptable: {avg_polarity:.4f}"
+
+            # Cache the result
+            sentiment_info = {
+                "allow_trading": allow_trading,
+                "sentiment_score": float(avg_polarity),
+                "sentiment_label": sentiment_label,
+                "news_count": len(recent_news),
+                "news_file": news_file,
+                "reason": reason,
+            }
+
+            self.cached_sentiment_info = sentiment_info
+            self.last_news_update = datetime.now()
+
+            return sentiment_info
+
+        except Exception as e:
+            print(f"     ⚠️ Error checking news sentiment: {e}")
+            import traceback
+
+            traceback.print_exc()
+            # Allow trading if news check fails
+            return {
+                "allow_trading": True,
+                "sentiment_score": 0.0,
+                "sentiment_label": "UNKNOWN",
+                "news_count": 0,
+                "news_file": None,
+                "reason": f"Error: {e}",
+            }
+
     def monitor_positions(self):
         """Monitor and log open positions, close if profit target reached"""
         print(f"\n  [Stats] Monitoring positions...")
@@ -546,8 +808,13 @@ class LiveTrading:
         for pos in positions_to_close:
             self.close_position(pos)
 
-    def run_inference(self) -> Optional[Dict]:
-        """Run inference and generate signal"""
+    def run_inference(self, news_file: Optional[str] = None) -> Optional[Dict]:
+        """
+        Run inference and generate signal
+
+        Args:
+            news_file: Optional path to news CSV file for sentiment features
+        """
         try:
             # Fetch live data
             df = self.inference.fetch_live_data(bars=300)
@@ -558,6 +825,19 @@ class LiveTrading:
             df_featured = self.inference.calculate_technical_indicators(df)
             if df_featured is None:
                 return None
+
+            # Add sentiment features if news available
+            if self.use_news_sentiment and news_file and Path(news_file).exists():
+                print(f"  📰 Adding sentiment features from {news_file}...")
+                try:
+                    df_featured = self.sentiment_features.merge_price_and_news(
+                        df_featured, news_file, windows=[1, 4, 12, 24]
+                    )
+                    print(
+                        f"  ✅ Added sentiment features (Total: {len(df_featured.columns)} features)"
+                    )
+                except Exception as e:
+                    print(f"  ⚠️ Could not add sentiment features: {e}")
 
             # Prepare features
             features = self.inference.prepare_features_for_prediction(df_featured)
@@ -683,15 +963,37 @@ class LiveTrading:
                         )
                         break
 
-                # Run inference
-                print("  [Predict] Running inference...")
-                signal = self.run_inference()
+                # Check news sentiment FIRST
+                sentiment_info = None
+                if self.use_news_sentiment:
+                    sentiment_info = self.check_news_sentiment()
 
-                if signal is not None:
-                    # Process signal
-                    self.process_signal(signal)
+                    # If sentiment is too negative, skip inference
+                    if not sentiment_info["allow_trading"]:
+                        print(f"  🚫 Skipping inference due to negative sentiment")
+                        print(f"     {sentiment_info['reason']}")
+                    else:
+                        # Run inference with news file for sentiment features
+                        print("  [Predict] Running inference...")
+                        signal = self.run_inference(
+                            news_file=sentiment_info.get("news_file")
+                        )
+
+                        if signal is not None:
+                            # Process signal (with sentiment info)
+                            self.process_signal(signal, sentiment_info)
+                        else:
+                            print("  [WARNING] No signal generated")
                 else:
-                    print("  [WARNING] No signal generated")
+                    # No sentiment check - run inference directly
+                    print("  [Predict] Running inference...")
+                    signal = self.run_inference()
+
+                    if signal is not None:
+                        # Process signal
+                        self.process_signal(signal)
+                    else:
+                        print("  [WARNING] No signal generated")
 
                 # Monitor positions
                 self.monitor_positions()
@@ -875,19 +1177,19 @@ def main():
         "--threshold",
         type=float,
         default=0.70,
-        help="Confidence threshold (0.70 = 70%)",
+        help="Confidence threshold (0.70 = 70 percent)",
     )
     parser.add_argument(
         "--risk",
         type=float,
         default=0.01,
-        help="Risk per trade (0.01 = 1%%)",
+        help="Risk per trade (0.01 = 1 percent)",
     )
     parser.add_argument(
         "--max-loss",
         type=float,
         default=0.05,
-        help="Max daily loss (0.05 = 5%%)",
+        help="Max daily loss (0.05 = 5 percent)",
     )
     parser.add_argument(
         "--interval",
